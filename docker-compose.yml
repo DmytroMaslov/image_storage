@@ -1,0 +1,8 @@
+version: '2.4'
+services:
+  rabbitmq:
+    image: rabbitmq:3.10.2-management-alpine
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672

@@ -1,6 +1,14 @@
 package tools
 
-import "image_storage/src/internal/domain"
+import (
+	"bytes"
+	"image/png"
+	"image_storage/src/internal/domain"
+	"io/ioutil"
+	"strconv"
+
+	"github.com/disintegration/imaging"
+)
 
 type OptimizeTool struct{}
 
@@ -8,11 +16,26 @@ func NewOptimizeTool() *OptimizeTool {
 	return &OptimizeTool{}
 }
 
-func (o *OptimizeTool) Optimize(input *domain.MyImage, quality string) (output *domain.MyImage, err error) {
-	//bimg logic
-	output = new(domain.MyImage)
-	output.Id = input.Id
-	output.Quality = quality
-	output.Data = input.Data
+func (o *OptimizeTool) ChangeQuality(input *domain.MyImage, quality string) (output *domain.MyImage, err error) {
+
+	img, err := png.Decode(bytes.NewReader(input.Data))
+	if err != nil {
+		return
+	}
+	w := new(bytes.Buffer)
+	q, err := strconv.Atoi(quality)
+	if err != nil {
+		return
+	}
+	err = imaging.Encode(w, img, imaging.JPEG, imaging.JPEGQuality(q))
+	if err != nil {
+		return
+	}
+	byteImage, err := ioutil.ReadAll(w)
+	output = &domain.MyImage{
+		Id:      input.Id,
+		Quality: quality,
+		Data:    byteImage,
+	}
 	return
 }

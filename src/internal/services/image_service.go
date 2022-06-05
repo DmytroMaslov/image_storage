@@ -41,7 +41,7 @@ func (s *ImageService) SendImageToQueue(image *domain.MyImage) error {
 }
 
 func (s *ImageService) OptimizeImages(myImage *domain.MyImage) (newImage *domain.MyImage, err error) {
-	newImage, err = s.optimize.Optimize(myImage, "80")
+	newImage, err = s.optimize.ChangeQuality(myImage, "80")
 	return
 }
 

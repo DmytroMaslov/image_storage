@@ -5,8 +5,9 @@ import (
 	"image_storage/src/config"
 	"image_storage/src/internal"
 	"image_storage/src/internal/domain"
+	"image_storage/src/internal/image_errors"
 	"image_storage/src/internal/services"
-	"log"
+	"image_storage/src/pkg"
 
 	"github.com/streadway/amqp"
 )
@@ -15,17 +16,20 @@ type ImageConsumer struct {
 	config  *config.Config
 	amqpCon *amqp.Connection
 	service services.ImageUseCases
+	log     pkg.Logger
 }
 
-func NewImageConsumer(config *config.Config, service services.ImageUseCases) (internal.ImageConsumer, error) {
+func NewImageConsumer(config *config.Config, service services.ImageUseCases, log pkg.Logger) (internal.ImageConsumer, error) {
 	amqpCon, err := amqp.Dial(config.QueueConnectionString)
 	if err != nil {
-		return nil, err
+		log.Errorf("consumer can't connect to Rabbit, reason: %s", err.Error())
+		return nil, image_errors.ErrCantConnect
 	}
 	var imageConsumer internal.ImageConsumer = &ImageConsumer{
 		config:  config,
 		amqpCon: amqpCon,
 		service: service,
+		log:     log,
 	}
 	return imageConsumer, nil
 }
@@ -33,7 +37,8 @@ func NewImageConsumer(config *config.Config, service services.ImageUseCases) (in
 func (c *ImageConsumer) SetUpQueue(queueName string) (ch *amqp.Channel, err error) {
 	ch, err = c.amqpCon.Channel()
 	if err != nil {
-		return
+		c.log.Errorf("consumer can't create channel, reason: %s", err.Error())
+		return nil, image_errors.ErrChannelCreate
 	}
 	_, err = ch.QueueDeclare(
 		c.config.QueueName,
@@ -44,12 +49,13 @@ func (c *ImageConsumer) SetUpQueue(queueName string) (ch *amqp.Channel, err erro
 		nil,   // arguments
 	)
 	if err != nil {
-		return
+		c.log.Errorf("consumer can't create channel, reason: %s", err.Error())
+		return nil, image_errors.ErrChannelCreate
 	}
 	return
 }
 
-func (c *ImageConsumer) RunConsumer(workerPoolSize int) (err error) {
+func (c *ImageConsumer) RunConsumer(workerPoolSize int, qualityArray []int) (err error) {
 	ch, err := c.SetUpQueue(c.config.QueueName)
 	if err != nil {
 		return
@@ -64,30 +70,27 @@ func (c *ImageConsumer) RunConsumer(workerPoolSize int) (err error) {
 		nil,
 	)
 	if err != nil {
-		return
+		c.log.Errorf("consumer can't consume message from channel, reason: %s", err.Error())
+		return image_errors.ErrConsume
 	}
 	for i := 0; i < workerPoolSize; i++ {
-		go c.worker(msgs)
+		go c.worker(msgs, qualityArray)
 	}
 	return
 }
 
-func (c *ImageConsumer) worker(msgs <-chan amqp.Delivery) {
+func (c *ImageConsumer) worker(msgs <-chan amqp.Delivery, qualityArray []int) {
 	for delivery := range msgs {
 		myImage := new(domain.MyImage)
 		err := json.Unmarshal(delivery.Body, &myImage)
 		if err != nil {
-			log.Println(err)
+			c.log.Errorf("worker can't unmarshal message, reason: %s", err.Error())
 		}
 		//add ack or reject logic
-		//var newImage domain.MyImage
-		newImage, err := c.service.OptimizeImages(myImage)
+		c.log.Infof("message successful consumed with id: %s", myImage.Id)
+		err = c.service.ReduceQuality(myImage, qualityArray)
 		if err != nil {
-			log.Println(err)
-		}
-		err = c.service.Save(newImage)
-		if err != nil {
-			log.Println(err)
+			c.log.Errorf("worker can't reduce quality: %s", err.Error())
 		}
 
 	}

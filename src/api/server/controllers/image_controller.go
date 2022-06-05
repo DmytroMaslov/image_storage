@@ -2,64 +2,70 @@ package controllers
 
 import (
 	"bytes"
-	"image_storage/src/internal/domain"
+	"fmt"
+	"image"
 	"image_storage/src/internal/services"
-	"io/ioutil"
-	"log"
+	"image_storage/src/pkg"
 	"net/http"
+	"strconv"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo"
 )
 
 type ImageController struct {
 	imageService services.ImageUseCases
+	log          pkg.Logger
 }
 
-func NewImageController(imageService services.ImageUseCases) *ImageController {
+func NewImageController(imageService services.ImageUseCases, logger pkg.Logger) *ImageController {
 	return &ImageController{
 		imageService: imageService,
+		log:          logger,
 	}
 }
 
 func (c *ImageController) Upload(e echo.Context) error {
 	file, err := e.FormFile("file")
 	if err != nil {
-		return e.String(http.StatusInternalServerError, err.Error())
+		c.log.Errorf("can't get file from request, reason: %s", err.Error())
+		return e.String(http.StatusBadRequest, "provide file")
 	}
 	src, err := file.Open()
 	if err != nil {
-		return e.String(http.StatusInternalServerError, err.Error())
+		c.log.Errorf("can't open file from request, reason: %s", err.Error())
+		return e.String(http.StatusBadRequest, "provide valid file format")
 	}
 	defer src.Close()
-	byteImageData, err := ioutil.ReadAll(src)
+	img, _, err := image.Decode(src)
 	if err != nil {
-		return e.String(http.StatusInternalServerError, err.Error())
+		c.log.Errorf("can't decode file from request, reason: %s", err.Error())
+		return e.String(http.StatusBadRequest, "provide valid file format")
 	}
-	image := &domain.MyImage{
-		Id:      uuid.New().String(),
-		Quality: "100",
-		Data:    byteImageData,
-	}
-	err = c.imageService.Save(image)
+	myImg, err := c.imageService.UploadImage(&img)
 	if err != nil {
-		return e.String(http.StatusInternalServerError, err.Error())
+		c.log.Errorf("can't save file from request, reason: %s", err.Error())
+		return e.String(http.StatusInternalServerError, "file not saved")
 	}
-	err = c.imageService.SendImageToQueue(image)
-	if err != nil {
-		return err
-	}
-	return e.String(http.StatusOK, image.Id)
+	return e.String(http.StatusOK, fmt.Sprintf("image id: %s", myImg.Id))
 }
 
 func (c *ImageController) Download(e echo.Context) error {
 	id := e.Param("id")
-	quality := e.QueryParam("quality")
-	log.Printf("id: %v, quality: %v", id, quality)
-	myImage, err := c.imageService.GetByIdAndQuality(id, quality)
-	if err != nil {
-		return err
+	if id == "" {
+		return e.String(http.StatusBadRequest, "provide valid image id")
 	}
-	return e.Stream(http.StatusOK, "image/png", bytes.NewReader(myImage.Data))
+	qualityString := e.QueryParam("quality")
+	if qualityString == "" {
+		return e.String(http.StatusBadRequest, "provide valid quality")
+	}
+	quality, err := strconv.Atoi(qualityString)
+	if err != nil {
+		return e.String(http.StatusBadRequest, "provide valid quality")
+	}
+	byteImage, err := c.imageService.GetByteImageByIdAndQuality(id, quality)
+	if err != nil {
+		return e.String(http.StatusNotFound, "can't fiend image by given params")
+	}
+	return e.Stream(http.StatusOK, "image/jpeg", bytes.NewReader(*byteImage))
 
 }

@@ -5,5 +5,5 @@ type ImageProducer interface {
 }
 
 type ImageConsumer interface {
-	RunConsumer(workerPoolSize int) (err error)
+	RunConsumer(workerPoolSize int, qualityArray []int) (err error)
 }

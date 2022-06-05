@@ -2,6 +2,6 @@ package domain
 
 type MyImage struct {
 	Id      string
-	Quality string
-	Data    []byte
+	Quality int
+	//Data    image.Image
 }

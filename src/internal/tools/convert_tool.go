@@ -10,17 +10,23 @@ import (
 	"github.com/sunshineplan/imgconv"
 )
 
-type ConvertTool struct {
+type convertTool struct {
 	log pkg.Logger
 }
 
-func NewOptimizeTool(logger pkg.Logger) *ConvertTool {
-	return &ConvertTool{
+func NewOptimizeTool(logger pkg.Logger) ConvertTool {
+	var ConvertTool ConvertTool = &convertTool{
 		log: logger,
 	}
+	return ConvertTool
 }
 
-func (c *ConvertTool) ConvertImageToJpeg(input *image.Image) (output image.Image, err error) {
+type ConvertTool interface {
+	ConvertImageToJpeg(input *image.Image) (output image.Image, err error)
+	ConvertImageToByteArray(image *image.Image) (output *[]byte, err error)
+}
+
+func (c *convertTool) ConvertImageToJpeg(input *image.Image) (output image.Image, err error) {
 	var buf bytes.Buffer
 	err = imgconv.Write(&buf, *input, imgconv.FormatOption{Format: imgconv.JPEG})
 	if err != nil {
@@ -38,9 +44,9 @@ func (c *ConvertTool) ConvertImageToJpeg(input *image.Image) (output image.Image
 	return
 }
 
-func (c *ConvertTool) ConvertImageToByteArray(myImg *image.Image) (output *[]byte, err error) {
+func (c *convertTool) ConvertImageToByteArray(image *image.Image) (output *[]byte, err error) {
 	buf := new(bytes.Buffer)
-	err = jpeg.Encode(buf, *myImg, nil)
+	err = jpeg.Encode(buf, *image, nil)
 	if err != nil {
 		c.log.Errorf("converter can't convert image to byte, reason: %v", err.Error())
 		err = image_errors.ErrCantConvert

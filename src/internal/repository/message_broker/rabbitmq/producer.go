@@ -51,10 +51,6 @@ func (p *ImageProducer) SetUpQueue(queueName string) (q amqp.Queue, err error) {
 	return q, nil
 }
 
-func (p *ImageProducer) CloseChannel() error {
-	return p.amqpChan.Close()
-}
-
 func (p *ImageProducer) Publish(body []byte, contentType string) (err error) {
 	err = p.amqpChan.Publish(
 		"",

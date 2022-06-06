@@ -15,7 +15,7 @@ import (
 
 type ImageService struct {
 	producer internal.ImageProducer
-	convert  *tools.ConvertTool
+	convert  tools.ConvertTool
 	repo     internal.ImageStorage
 	log      pkg.Logger
 	config   *config.Config
@@ -26,10 +26,10 @@ type ImageUseCases interface {
 	ReduceQuality(myImage *domain.MyImage, quality []int) (err error)
 }
 
-func NewImageService(producer internal.ImageProducer, optimize *tools.ConvertTool, repo internal.ImageStorage, logger pkg.Logger, config *config.Config) ImageUseCases {
+func NewImageService(producer internal.ImageProducer, convert tools.ConvertTool, repo internal.ImageStorage, logger pkg.Logger, config *config.Config) ImageUseCases {
 	var ImageService ImageUseCases = &ImageService{
 		producer: producer,
-		convert:  optimize,
+		convert:  convert,
 		repo:     repo,
 		log:      logger,
 		config:   config,
